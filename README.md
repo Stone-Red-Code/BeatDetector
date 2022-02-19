@@ -1,2 +1,2 @@
 # BeatDetector
- Tries to detect beats in songs
+> Tries to detect beats in songs
