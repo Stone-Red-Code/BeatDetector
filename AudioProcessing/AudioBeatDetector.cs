@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace BeatDetector.AudioProcessing;
 
-internal class AudioBeatDetector
+internal class AudioBeatDetector : IDisposable
 {
     public event EventHandler<BeatDetectorEventArgs>? OnBeat;
 
@@ -20,8 +20,9 @@ internal class AudioBeatDetector
     private readonly int chunkCount;
     private readonly BeatChunk[] beatChunks;
 
-    public AudioBeatDetector(TimeSpan beatDetectionDelay, int fftLength, int chunkCount)
+    public AudioBeatDetector(IWaveIn waveIn, TimeSpan beatDetectionDelay, int fftLength, int chunkCount)
     {
+        this.waveIn = waveIn;
         this.beatDetectionDelay = beatDetectionDelay;
         this.chunkCount = chunkCount;
         this.fftLength = fftLength;
@@ -38,10 +39,12 @@ internal class AudioBeatDetector
         sampleAggregator.FftCalculated += new EventHandler<FftEventArgs>(FftCalculated);
         sampleAggregator.PerformFFT = true;
 
-        waveIn = new WasapiLoopbackCapture();
         waveIn.DataAvailable += OnDataAvailable;
+    }
 
-        waveIn.StartRecording();
+    public void Dispose()
+    {
+        waveIn.DataAvailable -= OnDataAvailable;
     }
 
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
@@ -77,7 +80,7 @@ internal class AudioBeatDetector
 
         double averageEnergyLevel = beatChunk.EnergyHistory.Count > 0 ? beatChunk.EnergyHistory.Average() : double.MaxValue;
 
-        if (beatChunk.StopWatch.Elapsed >= beatDetectionDelay)
+        if (beatChunk.StopWatch.Elapsed >= beatDetectionDelay || beatDetectionDelay <= TimeSpan.Zero)
         {
             double difference = energyLevel - averageEnergyLevel;
 
@@ -88,6 +91,11 @@ internal class AudioBeatDetector
             }
             else
             {
+                //if (difference > 0)
+                //{
+                //    beatChunk.AverageDifference = (difference + beatChunk.AverageDifference) / 2.00001;
+                //}
+
                 OnNoBeat?.Invoke(this, new BeatDetectorEventArgs(chunkIndex, 0));
             }
             beatChunk.StopWatch.Restart();
